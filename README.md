@@ -25,7 +25,9 @@ flutter run -d web-server --web-port 8888   # 打开 http://127.0.0.1:8888
 - `lib/data/api_client.dart` — dio 封装，注入 Bearer token，错误统一成 `ApiException`
 - `lib/data/remote_ledger_repository.dart` — 走 REST 的账本仓库（线上用的就是它）
 - `lib/data/ledger_repository.dart` — 仓库接口 + 本地 SQLite / SharedPreferences 实现（离线备用，单测也用它）
-- `lib/auth/auth_session.dart` — JWT 与服务器地址的持久化、注册/登录/退出
+- `lib/auth/auth_session.dart` — JWT 与服务器地址的持久化、注册/登录/退出、改资料
+- `lib/pages/profile_page.dart` — 个人中心（右上角菜单进入）：点头像换图、改显示名称/手机号/邮箱，登录账号只读
+- `lib/utils/validators.dart` — 手机号与邮箱的校验正则，和后端 DTO 上的约束一一对应
 - `lib/state/ledger_store.dart` — 内存账本 + 把统计委托给仓库
 - `lib/models/stats.dart` — `Summary` / `TrendPoint` 等统计模型
 

@@ -14,23 +14,33 @@ const defaultApiBaseUrl = String.fromEnvironment(
 );
 
 class SessionUser {
-  const SessionUser(this.id, this.username, this.nickname);
+  const SessionUser(this.id, this.username, this.nickname,
+      {this.email = '', this.phone = '', this.hasAvatar = false});
 
   final int id;
   final String username;
   final String nickname;
+  final String email;
+  final String phone;
+  final bool hasAvatar;
 
   factory SessionUser.fromJson(Map<String, dynamic> json) =>
       SessionUser(
         (json['id'] as num).toInt(),
         json['username'] as String,
         json['nickname'] as String? ?? '',
+        email: json['email'] as String? ?? '',
+        phone: json['phone'] as String? ?? '',
+        hasAvatar: json['hasAvatar'] as bool? ?? false,
       );
 
   Map<String, Object?> toJson() => {
     'id': id,
     'username': username,
     'nickname': nickname,
+    'email': email,
+    'phone': phone,
+    'hasAvatar': hasAvatar,
   };
 }
 
@@ -62,6 +72,9 @@ class AuthSession extends ChangeNotifier {
   SessionUser? _user;
   ApiClient? _api;
 
+  /// 只在本次运行内有意义：重启后图片缓存本来就是空的，不需要持久化。
+  int _avatarVersion = 0;
+
   String get baseUrl => _baseUrl;
   SessionUser? get user => _user;
   bool get isSignedIn => _token != null;
@@ -85,14 +98,61 @@ class AuthSession extends ChangeNotifier {
   Future<void> login(String username, String password) =>
       _authenticate('/api/auth/login', {'username': username.trim(), 'password': password});
 
-  Future<void> register(String username, String password, String nickname) => _authenticate(
-    '/api/auth/register',
-    {
-      'username': username.trim(),
-      'password': password,
-      'nickname': nickname.trim(),
-    },
-  );
+  Future<void> register({
+    required String username,
+    required String password,
+    required String nickname,
+    String email = '',
+    String phone = '',
+  }) =>
+      _authenticate('/api/auth/register', {
+        'username': username.trim(),
+        'password': password,
+        'nickname': nickname.trim(),
+        'email': email.trim(),
+        'phone': phone.trim(),
+      });
+
+  /// 头像和接口共用同一个 Bearer token，图片加载器需要现成的请求头。
+  Map<String, String> get authHeaders =>
+      _token == null ? const {} : {'Authorization': 'Bearer $_token'};
+
+  /// 地址带版本号：Flutter 的 ImageCache 按 URL 命中，后端 no-store 管不到它，
+  /// URL 不变的话换图后拿到的还是内存里的旧图。服务端忽略这个查询参数。
+  String? get avatarUrl =>
+      _token != null && _user?.hasAvatar == true
+      ? '$_baseUrl/api/auth/me/avatar?v=$_avatarVersion'
+      : null;
+
+  /// 个人中心保存资料：后端回传最新用户信息，直接覆盖本地会话。
+  Future<void> updateProfile({
+    required String nickname,
+    required String email,
+    required String phone,
+  }) async {
+    final payload = await api.put(
+      '/api/auth/me',
+      {'nickname': nickname.trim(), 'email': email.trim(), 'phone': phone.trim()},
+    ) as Map;
+    await _applyUser(payload.cast<String, dynamic>());
+  }
+
+  Future<void> uploadAvatar({required List<int> bytes, required String filename}) async {
+    final payload = await api.postBytes(
+      '/api/auth/me/avatar',
+      field: 'file',
+      bytes: bytes,
+      filename: filename,
+    ) as Map;
+    _avatarVersion = DateTime.now().millisecondsSinceEpoch;
+    await _applyUser(payload.cast<String, dynamic>());
+  }
+
+  Future<void> _applyUser(Map<String, dynamic> payload) async {
+    _user = SessionUser.fromJson(payload);
+    await _prefs.setString(_kUser, jsonEncode(_user!.toJson()));
+    notifyListeners();
+  }
 
   Future<void> signOut() async {
     await _prefs.remove(_kToken);

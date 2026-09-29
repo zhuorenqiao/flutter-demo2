@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../data/api_client.dart';
 import '../auth/auth_session.dart';
+import '../utils/validators.dart';
 
 /// 登录 / 注册页：拿到后端签发的 JWT 后才能进入账本。
 class LoginPage extends StatefulWidget {
@@ -18,6 +19,8 @@ class _LoginPageState extends State<LoginPage> {
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _nickname = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
   late final TextEditingController _server = TextEditingController(
     text: widget.session.baseUrl,
   );
@@ -31,6 +34,8 @@ class _LoginPageState extends State<LoginPage> {
     _username.dispose();
     _password.dispose();
     _nickname.dispose();
+    _phone.dispose();
+    _email.dispose();
     _server.dispose();
     super.dispose();
   }
@@ -42,6 +47,18 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _error = '请填写用户名和密码');
       return;
     }
+    if (_registerMode) {
+      final phone = _phone.text.trim();
+      if (phone.isNotEmpty && !cnMobilePattern.hasMatch(phone)) {
+        setState(() => _error = '手机号要填 11 位中国大陆号码，或者留空');
+        return;
+      }
+      final email = _email.text.trim();
+      if (email.isNotEmpty && !emailPattern.hasMatch(email)) {
+        setState(() => _error = '邮箱格式不正确，或者留空');
+        return;
+      }
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -49,7 +66,13 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await widget.session.setBaseUrl(_server.text);
       if (_registerMode) {
-        await widget.session.register(username, password, _nickname.text);
+        await widget.session.register(
+          username: username,
+          password: password,
+          nickname: _nickname.text,
+          email: _email.text,
+          phone: _phone.text,
+        );
       } else {
         await widget.session.login(username, password);
       }
@@ -131,6 +154,28 @@ class _LoginPageState extends State<LoginPage> {
                             decoration: const InputDecoration(
                               labelText: '昵称（可选）',
                             ),
+                            enabled: !_busy,
+                            onSubmitted: (_) => _submit(),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _phone,
+                            decoration: const InputDecoration(
+                              labelText: '手机号（可选）',
+                              hintText: '中国大陆 11 位',
+                            ),
+                            keyboardType: TextInputType.phone,
+                            maxLength: 11,
+                            enabled: !_busy,
+                            onSubmitted: (_) => _submit(),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _email,
+                            decoration: const InputDecoration(
+                              labelText: '邮箱（可选）',
+                            ),
+                            keyboardType: TextInputType.emailAddress,
                             enabled: !_busy,
                             onSubmitted: (_) => _submit(),
                           ),

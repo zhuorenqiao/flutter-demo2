@@ -55,6 +55,22 @@ class ApiClient {
 
   Future<dynamic> post(String path, Object? body) => _send(() => _dio.post(path, data: body));
 
+  Future<dynamic> put(String path, Object? body) => _send(() => _dio.put(path, data: body));
+
+  /// 上传二进制（头像）。web 端拿不到文件路径，只能传字节。
+  Future<dynamic> postBytes(
+    String path, {
+    required String field,
+    required List<int> bytes,
+    required String filename,
+  }) =>
+      _send(() => _dio.post(
+            path,
+            data: FormData.fromMap({
+              field: MultipartFile.fromBytes(bytes, filename: filename),
+            }),
+          ));
+
   Future<dynamic> delete(String path) => _send(() => _dio.delete(path));
 
   Future<dynamic> _send(Future<Response<dynamic>> Function() request) async {

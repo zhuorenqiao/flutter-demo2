@@ -7,6 +7,7 @@ import '../state/theme_mode_controller.dart';
 import '../utils/run_guarded.dart';
 import 'add_txn_page.dart';
 import 'analytics_page.dart';
+import 'profile_page.dart';
 import 'records_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -37,6 +38,11 @@ class _HomePageState extends State<HomePage> {
 
   void _onMenu(String value) {
     switch (value) {
+      case 'profile':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProfilePage(session: widget.session)),
+        );
       case 'seed':
         runGuarded(context, widget.store.seedDemoData);
       case 'clear':
@@ -107,6 +113,15 @@ class _HomePageState extends State<HomePage> {
           PopupMenuButton<String>(
             onSelected: _onMenu,
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'profile',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.person_outline),
+                  title: Text('个人中心'),
+                ),
+              ),
+              const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'seed',
                 child: ListTile(
