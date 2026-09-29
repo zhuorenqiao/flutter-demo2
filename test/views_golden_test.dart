@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_demo2/app_theme.dart';
-import 'package:flutter_demo2/auth/auth_session.dart';
-import 'package:flutter_demo2/data/ledger_repository.dart';
-import 'package:flutter_demo2/models/txn.dart' show formatDay;
-import 'package:flutter_demo2/pages/add_txn_page.dart';
-import 'package:flutter_demo2/pages/analytics_page.dart';
-import 'package:flutter_demo2/pages/home_page.dart';
-import 'package:flutter_demo2/pages/login_page.dart';
-import 'package:flutter_demo2/pages/records_page.dart';
-import 'package:flutter_demo2/state/ledger_store.dart';
-import 'package:flutter_demo2/state/theme_mode_controller.dart';
+import 'package:ledger_front/app_theme.dart';
+import 'package:ledger_front/auth/auth_session.dart';
+import 'package:ledger_front/data/ledger_repository.dart';
+import 'package:ledger_front/models/txn.dart' show formatDay;
+import 'package:ledger_front/pages/add_txn_page.dart';
+import 'package:ledger_front/pages/analytics_page.dart';
+import 'package:ledger_front/pages/home_page.dart';
+import 'package:ledger_front/pages/login_page.dart';
+import 'package:ledger_front/pages/records_page.dart';
+import 'package:ledger_front/state/ledger_store.dart';
+import 'package:ledger_front/state/theme_mode_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

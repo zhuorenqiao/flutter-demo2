@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:flutter_demo2/data/api_client.dart';
-import 'package:flutter_demo2/data/remote_ledger_repository.dart';
-import 'package:flutter_demo2/models/txn.dart';
+import 'package:ledger_front/data/api_client.dart';
+import 'package:ledger_front/data/remote_ledger_repository.dart';
+import 'package:ledger_front/models/txn.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 按请求返回固定 JSON，用来校验客户端与后端 DTO 的字段约定。

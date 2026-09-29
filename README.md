@@ -1,4 +1,4 @@
-# flutter_demo2 — 记账本
+# ledger-front — 记账本（Flutter 客户端）
 
 Flutter 记账应用，数据来自 Java 后端 + MySQL（同级目录 `../ledger-backend`）。
 日/月/年趋势与分类占比都由后端 SQL 聚合，客户端只负责渲染。

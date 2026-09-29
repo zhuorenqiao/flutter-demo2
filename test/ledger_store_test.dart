@@ -1,8 +1,8 @@
-import 'package:flutter_demo2/data/demo_data.dart';
-import 'package:flutter_demo2/data/ledger_repository.dart';
-import 'package:flutter_demo2/models/stats.dart';
-import 'package:flutter_demo2/models/txn.dart';
-import 'package:flutter_demo2/state/ledger_store.dart';
+import 'package:ledger_front/data/demo_data.dart';
+import 'package:ledger_front/data/ledger_repository.dart';
+import 'package:ledger_front/models/stats.dart';
+import 'package:ledger_front/models/txn.dart';
+import 'package:ledger_front/state/ledger_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Txn expense(String categoryKey, double amount, String day) => Txn(

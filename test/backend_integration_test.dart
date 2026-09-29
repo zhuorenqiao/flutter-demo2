@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:flutter_demo2/data/api_client.dart';
-import 'package:flutter_demo2/data/demo_data.dart';
-import 'package:flutter_demo2/data/remote_ledger_repository.dart';
-import 'package:flutter_demo2/models/txn.dart';
+import 'package:ledger_front/data/api_client.dart';
+import 'package:ledger_front/data/demo_data.dart';
+import 'package:ledger_front/data/remote_ledger_repository.dart';
+import 'package:ledger_front/models/txn.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 真实联调用例：需要 MySQL + Spring Boot 已启动。
