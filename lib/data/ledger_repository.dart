@@ -1,15 +1,30 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/stats.dart';
 import '../models/txn.dart';
 
-/// 账本存储接口：移动端走 SQLite，Web 走 SharedPreferences。
+/// 一页账单及其后是否还有数据。
+class TxnPage {
+  const TxnPage(this.txns, this.hasMore);
+
+  final List<Txn> txns;
+  final bool hasMore;
+}
+
+/// 账本存储接口：后端仓库走 REST + MySQL，本地实现（移动端 SQLite、Web 端
+/// SharedPreferences）作为离线备用。
 abstract class LedgerRepository {
   Future<List<Txn>> loadAll();
+
+  /// 分页读取，流水页懒加载用。
+  Future<TxnPage> loadPage(int page, int size);
+
+  /// 某一天的全部账单（报表的当日流水）。
+  Future<List<Txn>> loadDay(String day);
 
   Future<Txn> insert(Txn txn);
 
@@ -18,11 +33,67 @@ abstract class LedgerRepository {
   Future<void> delete(int id);
 
   Future<void> deleteAll();
+
+  /// 区间统计，fromDay/toDay 为 yyyy-MM-dd，省略即不限。
+  Future<Summary> summary({String? fromDay, String? toDay});
+
+  Future<List<TrendPoint>> dailyTrend(int year, int month);
+
+  Future<List<TrendPoint>> monthlyTrend(int year);
+
+  /// 有账单的年份，倒序；至少包含今年。
+  Future<List<int>> years();
 }
 
-Future<LedgerRepository> openLedgerRepository() async {
-  if (kIsWeb) return SharedPreferencesRepository();
-  return SqfliteRepository();
+/// 本地仓库共用：把账单读进内存后按后端口径聚合、分页。
+mixin InMemoryStats on LedgerRepository {
+  @override
+  Future<TxnPage> loadPage(int page, int size) async {
+    final all = await loadAll();
+    final start = page * size;
+    if (start >= all.length) return const TxnPage([], false);
+    final end = (start + size).clamp(0, all.length);
+    return TxnPage(all.sublist(start, end), end < all.length);
+  }
+
+  @override
+  Future<List<Txn>> loadDay(String day) async =>
+      (await loadAll()).where((t) => t.day == day).toList();
+
+  @override
+  Future<Summary> summary({String? fromDay, String? toDay}) async {
+    return summarize(_inRange(await loadAll(), fromDay, toDay));
+  }
+
+  @override
+  Future<List<TrendPoint>> dailyTrend(int year, int month) async {
+    final all = await loadAll();
+    return dailyTrendOf(
+      all.where((t) => t.dayDate.year == year && t.dayDate.month == month),
+      year,
+      month,
+    );
+  }
+
+  @override
+  Future<List<TrendPoint>> monthlyTrend(int year) async {
+    final all = await loadAll();
+    return monthlyTrendOf(
+      all.where((t) => t.dayDate.year == year),
+      year,
+    );
+  }
+
+  @override
+  Future<List<int>> years() async {
+    final set = (await loadAll()).map((t) => t.dayDate.year).toSet();
+    set.add(DateTime.now().year);
+    return set.toList()..sort((a, b) => b.compareTo(a));
+  }
+
+  static Iterable<Txn> _inRange(List<Txn> txns, String? fromDay, String? toDay) => txns.where((t) =>
+      (fromDay == null || t.day.compareTo(fromDay) >= 0) &&
+      (toDay == null || t.day.compareTo(toDay) <= 0));
 }
 
 const _rowType = 'type';
@@ -51,7 +122,7 @@ Txn _fromRow(int id, Map<String, Object?> row) => Txn(
   createdAt: (row[_rowCreated] as num).toInt(),
 );
 
-class SqfliteRepository implements LedgerRepository {
+class SqfliteRepository extends LedgerRepository with InMemoryStats {
   SqfliteRepository();
 
   static const _dbName = 'ledger.db';
@@ -118,7 +189,7 @@ class SqfliteRepository implements LedgerRepository {
   }
 }
 
-class SharedPreferencesRepository implements LedgerRepository {
+class SharedPreferencesRepository extends LedgerRepository with InMemoryStats {
   SharedPreferencesRepository();
 
   static const _key = 'ledger.txns';

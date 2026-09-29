@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../app_theme.dart';
+import '../models/stats.dart';
 import '../models/txn.dart';
 import '../state/ledger_store.dart';
 import '../widgets/charts.dart';
+
+const _segmentLabelStyle = TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key, required this.store, required this.onAdd});
@@ -30,10 +34,38 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: SegmentedButton<int>(
+              expandedInsets: EdgeInsets.zero,
               segments: const [
-                ButtonSegment(value: 0, label: Text('每日'), icon: Icon(Icons.ac_unit)),
-                ButtonSegment(value: 1, label: Text('每月'), icon: Icon(Icons.calendar_month)),
-                ButtonSegment(value: 2, label: Text('每年'), icon: Icon(Icons.calendar_today)),
+                ButtonSegment(
+                  value: 0,
+                  label: Text(
+                    '每日',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: _segmentLabelStyle,
+                  ),
+                  icon: Icon(Icons.ac_unit, size: 18),
+                ),
+                ButtonSegment(
+                  value: 1,
+                  label: Text(
+                    '每月',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: _segmentLabelStyle,
+                  ),
+                  icon: Icon(Icons.calendar_month, size: 18),
+                ),
+                ButtonSegment(
+                  value: 2,
+                  label: Text(
+                    '每年',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: _segmentLabelStyle,
+                  ),
+                  icon: Icon(Icons.calendar_today, size: 18),
+                ),
               ],
               selected: {_tab},
               onSelectionChanged: (s) => setState(() => _tab = s.first),
@@ -45,22 +77,26 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           child: ListenableBuilder(
             listenable: widget.store,
             builder: (context, _) {
+              final revision = widget.store.revision;
               switch (_tab) {
                 case 1:
                   return _MonthlyView(
                     store: widget.store,
+                    revision: revision,
                     month: _month,
                     onMonthChanged: (m) => setState(() => _month = m),
                   );
                 case 2:
                   return _YearlyView(
                     store: widget.store,
+                    revision: revision,
                     year: _year,
                     onYearChanged: (y) => setState(() => _year = y),
                   );
                 default:
                   return _DailyView(
                     store: widget.store,
+                    revision: revision,
                     day: _day,
                     onDayChanged: (d) => setState(() => _day = d),
                     onAdd: widget.onAdd,
@@ -95,10 +131,15 @@ class _RangePickerBar extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(onPressed: onPrev, icon: const Icon(Icons.chevron_left)),
-        TextButton.icon(
-          onPressed: onPick,
-          icon: const Icon(Icons.tune, size: 16),
-          label: Text(label, style: const TextStyle(fontSize: 17)),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: TextButton.icon(
+              onPressed: onPick,
+              icon: const Icon(Icons.tune, size: 16),
+              label: Text(label, style: const TextStyle(fontSize: 17)),
+            ),
+          ),
         ),
         IconButton(
           onPressed: isMaxReached ? null : onNext,
@@ -109,43 +150,78 @@ class _RangePickerBar extends StatelessWidget {
   }
 }
 
-class _DailyView extends StatelessWidget {
+class _DailyView extends StatefulWidget {
   const _DailyView({
     required this.store,
+    required this.revision,
     required this.day,
     required this.onDayChanged,
     required this.onAdd,
   });
 
   final LedgerStore store;
+  final int revision;
   final DateTime day;
   final ValueChanged<DateTime> onDayChanged;
   final VoidCallback onAdd;
 
+  @override
+  State<_DailyView> createState() => _DailyViewState();
+}
+
+class _DailyViewState extends State<_DailyView> {
+  Summary _summary = Summary.empty;
+  List<Txn> _txns = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_DailyView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.day != oldWidget.day || widget.revision != oldWidget.revision) _load();
+  }
+
+  Future<void> _load() async {
+    final day = widget.day;
+    final summaryFuture = widget.store.summaryOfDay(day);
+    final txnsFuture = widget.store.txnsOfDay(day);
+    final result = (await summaryFuture, await txnsFuture);
+    if (!mounted || day != widget.day) return;
+    setState(() {
+      _summary = result.$1;
+      _txns = result.$2;
+    });
+  }
+
   Future<void> _pick(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: day,
+      initialDate: widget.day,
       firstDate: DateTime(2015),
       lastDate: DateTime.now(),
     );
-    if (picked != null) onDayChanged(picked);
+    if (picked != null) widget.onDayChanged(picked);
   }
 
   @override
   Widget build(BuildContext context) {
     final today = dayKey(DateTime.now());
-    final summary = store.summaryOfDay(day);
-    final txns = store.txnsOfDay(day);
+    final day = widget.day;
+    final txns = _txns;
+    final summary = _summary;
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
       children: [
         _RangePickerBar(
           label: '${formatDay(day)} ${weekdayLabel(day)}',
-          onPrev: () => onDayChanged(day.subtract(const Duration(days: 1))),
+          onPrev: () => widget.onDayChanged(day.subtract(const Duration(days: 1))),
           onNext: () {
             final next = day.add(const Duration(days: 1));
-            if (dayKey(next).compareTo(today) <= 0) onDayChanged(next);
+            if (dayKey(next).compareTo(today) <= 0) widget.onDayChanged(next);
           },
           onPick: () => _pick(context),
           isMaxReached: dayKey(day).compareTo(today) >= 0,
@@ -170,7 +246,7 @@ class _DailyView extends StatelessWidget {
                 const SizedBox(height: 8),
                 if (txns.isEmpty)
                   TextButton(
-                    onPressed: onAdd,
+                    onPressed: widget.onAdd,
                     child: const Text('今天还没有记账，点我去记一笔'),
                   )
                 else
@@ -184,35 +260,69 @@ class _DailyView extends StatelessWidget {
   }
 }
 
-class _MonthlyView extends StatelessWidget {
+class _MonthlyView extends StatefulWidget {
   const _MonthlyView({
     required this.store,
+    required this.revision,
     required this.month,
     required this.onMonthChanged,
   });
 
   final LedgerStore store;
+  final int revision;
   final DateTime month;
   final ValueChanged<DateTime> onMonthChanged;
+
+  @override
+  State<_MonthlyView> createState() => _MonthlyViewState();
+}
+
+class _MonthlyViewState extends State<_MonthlyView> {
+  Summary _summary = Summary.empty;
+  List<TrendPoint> _trend = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_MonthlyView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.month != oldWidget.month || widget.revision != oldWidget.revision) _load();
+  }
+
+  Future<void> _load() async {
+    final month = widget.month;
+    final summaryFuture = widget.store.summaryOfMonth(month.year, month.month);
+    final trendFuture = widget.store.dailyTrend(month.year, month.month);
+    final result = (await summaryFuture, await trendFuture);
+    if (!mounted || month != widget.month) return;
+    setState(() {
+      _summary = result.$1;
+      _trend = result.$2;
+    });
+  }
 
   Future<void> _pick(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: month,
+      initialDate: widget.month,
       firstDate: DateTime(2015),
       lastDate: DateTime.now(),
     );
     if (picked != null) {
-      onMonthChanged(DateTime(picked.year, picked.month));
+      widget.onMonthChanged(DateTime(picked.year, picked.month));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final nowMonth = DateTime(DateTime.now().year, DateTime.now().month);
-    final summary = store.summaryOfMonth(month.year, month.month);
-    final trend = store.dailyTrend(month.year, month.month);
-    final busiest = trend.fold<TrendPoint?>(
+    final month = widget.month;
+    final summary = _summary;
+    final busiest = _trend.fold<TrendPoint?>(
       null,
       (best, p) => best == null || p.expense > best.expense ? p : best,
     );
@@ -222,27 +332,25 @@ class _MonthlyView extends StatelessWidget {
       children: [
         _RangePickerBar(
           label: formatMonth(month),
-          onPrev: () =>
-              onMonthChanged(DateTime(month.year, month.month - 1)),
-          onNext: () =>
-              onMonthChanged(DateTime(month.year, month.month + 1)),
+          onPrev: () => widget.onMonthChanged(DateTime(month.year, month.month - 1)),
+          onNext: () => widget.onMonthChanged(DateTime(month.year, month.month + 1)),
           onPick: () => _pick(context),
           isMaxReached: !month.isBefore(nowMonth),
         ),
         const SizedBox(height: 8),
         SummaryCards(
           summary: summary,
-          subtitle:
-              '日均支出 ${formatMoney(summary.expense / daysInMonth)}',
+          subtitle: '日均支出 ${formatMoney(summary.expense / daysInMonth)}',
         ),
         const SizedBox(height: 12),
         TrendBarCard(
-          title: '每日收支趋势',
-          points: trend,
+          title: '每日支出趋势',
+          points: _trend,
           unitLabel: '日',
+          showIncome: false,
         ),
         const SizedBox(height: 8),
-        const LegendRow(),
+        const LegendRow(showIncome: false),
         const SizedBox(height: 12),
         CategoryPieCard(title: '本月支出构成', slices: summary.expenseByCategory),
         const SizedBox(height: 12),
@@ -260,7 +368,7 @@ class _MonthlyView extends StatelessWidget {
               trailing: Text(
                 formatMoney(busiest.expense),
                 style: const TextStyle(
-                  color: Color(0xFFE53935),
+                  color: kExpense,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -271,23 +379,76 @@ class _MonthlyView extends StatelessWidget {
   }
 }
 
-class _YearlyView extends StatelessWidget {
+class _YearlyView extends StatefulWidget {
   const _YearlyView({
     required this.store,
+    required this.revision,
     required this.year,
     required this.onYearChanged,
   });
 
   final LedgerStore store;
+  final int revision;
   final int year;
   final ValueChanged<int> onYearChanged;
 
   @override
+  State<_YearlyView> createState() => _YearlyViewState();
+}
+
+class _YearlyViewState extends State<_YearlyView> {
+  Summary _summary = Summary.empty;
+  List<TrendPoint> _trend = const [];
+  List<int> _years = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_YearlyView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.year != oldWidget.year || widget.revision != oldWidget.revision) _load();
+  }
+
+  Future<void> _load() async {
+    final year = widget.year;
+    final summaryFuture = widget.store.summaryOfYear(year);
+    final trendFuture = widget.store.monthlyTrend(year);
+    final yearsFuture = widget.store.years();
+    final result = (await summaryFuture, await trendFuture, await yearsFuture);
+    if (!mounted || year != widget.year) return;
+    setState(() {
+      _summary = result.$1;
+      _trend = result.$2;
+      _years = result.$3;
+    });
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('选择年份'),
+        children: [
+          for (final y in _years)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, y),
+              child: Text('$y 年'),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) widget.onYearChanged(picked);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final years = store.years;
-    final summary = store.summaryOfYear(year);
-    final trend = store.monthlyTrend(year);
-    final peak = trend.fold<TrendPoint?>(
+    final year = widget.year;
+    final summary = _summary;
+    final peak = _trend.fold<TrendPoint?>(
       null,
       (best, p) => best == null || p.expense > best.expense ? p : best,
     );
@@ -297,25 +458,10 @@ class _YearlyView extends StatelessWidget {
       children: [
         _RangePickerBar(
           label: '$year 年',
-          onPrev: () => onYearChanged(year - 1),
-          onNext: () => onYearChanged(year + 1),
+          onPrev: () => widget.onYearChanged(year - 1),
+          onNext: () => widget.onYearChanged(year + 1),
           isMaxReached: year >= thisYear,
-          onPick: () async {
-            final picked = await showDialog<int>(
-              context: context,
-              builder: (context) => SimpleDialog(
-                title: const Text('选择年份'),
-                children: [
-                  for (final y in years)
-                    SimpleDialogOption(
-                      onPressed: () => Navigator.pop(context, y),
-                      child: Text('$y 年'),
-                    ),
-                ],
-              ),
-            );
-            if (picked != null) onYearChanged(picked);
-          },
+          onPick: () => _pick(context),
         ),
         const SizedBox(height: 8),
         SummaryCards(
@@ -325,7 +471,7 @@ class _YearlyView extends StatelessWidget {
         const SizedBox(height: 12),
         TrendBarCard(
           title: '每月收支趋势',
-          points: trend,
+          points: _trend,
           unitLabel: '月',
         ),
         const SizedBox(height: 8),
@@ -349,14 +495,14 @@ class _YearlyView extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              for (final p in trend)
+              for (final p in _trend)
                 if (p.expense > 0)
                   _MonthBar(
                     label: '${p.label}月',
                     amount: p.expense,
                     maxAmount: peak?.expense ?? 1,
                   ),
-              if (trend.every((p) => p.expense == 0))
+              if (_trend.every((p) => p.expense == 0))
                 const Padding(
                   padding: EdgeInsets.all(12),
                   child: Text('这一年还没有支出记录'),
@@ -393,6 +539,7 @@ class _MonthBar extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: maxAmount <= 0 ? 0 : amount / maxAmount,
                 minHeight: 10,
+                color: kExpense,
                 backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               ),
             ),
@@ -431,15 +578,13 @@ class _TxnRow extends StatelessWidget {
       ),
       title: Text(cat.label + (txn.note.isEmpty ? '' : ' · ${txn.note}')),
       subtitle: Text(
-        DateTime.fromMillisecondsSinceEpoch(txn.createdAt)
-            .toString()
-            .substring(11, 16),
+        DateTime.fromMillisecondsSinceEpoch(txn.createdAt).toString().substring(11, 16),
       ),
       trailing: Text(
         '${isExpense ? '-' : '+'}${formatMoney(txn.amount)}',
         style: TextStyle(
           fontWeight: FontWeight.w700,
-          color: isExpense ? const Color(0xFFE53935) : const Color(0xFF43A047),
+          color: isExpense ? kExpense : kIncome,
         ),
       ),
     );

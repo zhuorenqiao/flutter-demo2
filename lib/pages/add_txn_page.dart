@@ -40,7 +40,7 @@ class _AddTxnPageState extends State<AddTxnPage> {
       context: context,
       initialDate: _day,
       firstDate: DateTime(2015),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
+      lastDate: DateTime.now(),
     );
     if (picked != null) setState(() => _day = picked);
   }
@@ -54,16 +54,25 @@ class _AddTxnPageState extends State<AddTxnPage> {
       return;
     }
     setState(() => _saving = true);
-    await widget.store.add(
-      Txn(
-        type: _type,
-        categoryKey: _categoryKey,
-        amount: double.parse(amount.toStringAsFixed(2)),
-        day: dayKey(_day),
-        createdAt: DateTime.now().millisecondsSinceEpoch,
-        note: _noteCtrl.text.trim(),
-      ),
-    );
+    try {
+      await widget.store.add(
+        Txn(
+          type: _type,
+          categoryKey: _categoryKey,
+          amount: double.parse(amount.toStringAsFixed(2)),
+          day: dayKey(_day),
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          note: _noteCtrl.text.trim(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败：$e')));
+      return;
+    }
     if (!mounted) return;
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -113,7 +122,7 @@ class _AddTxnPageState extends State<AddTxnPage> {
                   border: InputBorder.none,
                   prefixText: '¥ ',
                   hintText: '0.00',
-                  hintStyle: TextStyle(color: Colors.black26),
+                  hintStyle: TextStyle(color: Color(0xFFBCC5DE)),
                 ),
               ),
             ),

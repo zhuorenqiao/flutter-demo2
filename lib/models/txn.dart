@@ -12,23 +12,23 @@ class TxnCategory {
 }
 
 const List<TxnCategory> kExpenseCategories = [
-  TxnCategory('food', '餐饮', Icons.restaurant, Color(0xFFFF7043)),
-  TxnCategory('transport', '交通', Icons.local_taxi, Color(0xFF42A5F5)),
-  TxnCategory('shopping', '购物', Icons.shopping_bag, Color(0xFFAB47BC)),
-  TxnCategory('housing', '居住', Icons.home, Color(0xFF26A69A)),
-  TxnCategory('entertainment', '娱乐', Icons.sports_esports, Color(0xFFFFCA28)),
-  TxnCategory('medical', '医疗', Icons.local_hospital, Color(0xFFEF5350)),
-  TxnCategory('study', '学习', Icons.menu_book, Color(0xFF5C6BC0)),
-  TxnCategory('beauty', '服饰美容', Icons.checkroom, Color(0xFFEC407A)),
-  TxnCategory('other_expense', '其他', Icons.more_horiz, Color(0xFF78909C)),
+  TxnCategory('food', '餐饮', Icons.restaurant, Color(0xFFFF7A45)),
+  TxnCategory('transport', '交通', Icons.local_taxi, Color(0xFF2FA8FF)),
+  TxnCategory('shopping', '购物', Icons.shopping_bag, Color(0xFFA855F7)),
+  TxnCategory('housing', '居住', Icons.home, Color(0xFF14C3A2)),
+  TxnCategory('entertainment', '娱乐', Icons.sports_esports, Color(0xFFFFC53D)),
+  TxnCategory('medical', '医疗', Icons.local_hospital, Color(0xFFFF4D6D)),
+  TxnCategory('study', '学习', Icons.menu_book, Color(0xFF4C6EF5)),
+  TxnCategory('beauty', '服饰美容', Icons.checkroom, Color(0xFFF06595)),
+  TxnCategory('other_expense', '其他', Icons.more_horiz, Color(0xFF8C9BAB)),
 ];
 
 const List<TxnCategory> kIncomeCategories = [
-  TxnCategory('salary', '工资', Icons.badge, Color(0xFF43A047)),
-  TxnCategory('bonus', '奖金', Icons.card_giftcard, Color(0xFFFFB300)),
-  TxnCategory('part_time', '兼职', Icons.work, Color(0xFF039BE5)),
-  TxnCategory('investment', '理财', Icons.trending_up, Color(0xFF8E24AA)),
-  TxnCategory('other_income', '其他', Icons.savings, Color(0xFF78909C)),
+  TxnCategory('salary', '工资', Icons.badge, Color(0xFF22C55E)),
+  TxnCategory('bonus', '奖金', Icons.card_giftcard, Color(0xFFFB923C)),
+  TxnCategory('part_time', '兼职', Icons.work, Color(0xFF06B6D4)),
+  TxnCategory('investment', '理财', Icons.trending_up, Color(0xFF8B5CF6)),
+  TxnCategory('other_income', '其他', Icons.savings, Color(0xFF8C9BAB)),
 ];
 
 TxnCategory categoryOf(String key) {

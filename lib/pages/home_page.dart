@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../auth/auth_session.dart';
+import '../app_theme.dart';
 import '../state/ledger_store.dart';
+import '../state/theme_mode_controller.dart';
+import '../utils/run_guarded.dart';
 import 'add_txn_page.dart';
 import 'analytics_page.dart';
 import 'records_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.store});
+  const HomePage({
+    super.key,
+    required this.store,
+    required this.session,
+    required this.theme,
+  });
 
   final LedgerStore store;
+  final AuthSession session;
+  final ThemeModeController theme;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -24,12 +35,53 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _onMenu(String value) {
+    switch (value) {
+      case 'seed':
+        runGuarded(context, widget.store.seedDemoData);
+      case 'clear':
+        _clearAll();
+      case 'theme':
+        _pickThemeMode();
+      case 'signout':
+        widget.session.signOut();
+    }
+  }
+
+  static const _themeChoices = <(ThemeMode, String, IconData)>[
+    (ThemeMode.system, '跟随系统', Icons.brightness_auto),
+    (ThemeMode.light, '浅色', Icons.light_mode),
+    (ThemeMode.dark, '深色', Icons.dark_mode),
+  ];
+
+  Future<void> _pickThemeMode() async {
+    final picked = await showDialog<ThemeMode>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('切换主题'),
+        children: [
+          for (final (mode, label, icon) in _themeChoices)
+            ListTile(
+              dense: true,
+              leading: Icon(icon),
+              title: Text(label),
+              trailing: widget.theme.mode == mode
+                  ? const Icon(Icons.check, color: kPrimary)
+                  : null,
+              onTap: () => Navigator.pop(context, mode),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) await widget.theme.setMode(picked);
+  }
+
   Future<void> _clearAll() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('清空所有账单？'),
-        content: const Text('本地数据库中的记录会被全部删除，此操作不可撤销。'),
+        content: const Text('服务器上的全部账单记录会被删除，此操作不可撤销。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -42,7 +94,8 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
-    if (ok == true) await widget.store.clearAll();
+    if (ok != true || !mounted) return;
+    await runGuarded(context, widget.store.clearAll);
   }
 
   @override
@@ -52,11 +105,9 @@ class _HomePageState extends State<HomePage> {
         title: Text(_index == 0 ? '我的账本' : '收支报表'),
         actions: [
           PopupMenuButton<String>(
-            onSelected: (v) => v == 'seed'
-                ? widget.store.seedDemoData()
-                : _clearAll(),
-            itemBuilder: (context) => const [
-              PopupMenuItem(
+            onSelected: _onMenu,
+            itemBuilder: (context) => [
+              const PopupMenuItem(
                 value: 'seed',
                 child: ListTile(
                   dense: true,
@@ -64,12 +115,28 @@ class _HomePageState extends State<HomePage> {
                   title: Text('载入示例数据'),
                 ),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'clear',
                 child: ListTile(
                   dense: true,
                   leading: Icon(Icons.delete_sweep),
                   title: Text('清空账单'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'theme',
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.palette_outlined),
+                  title: Text('切换主题（${widget.theme.label}）'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'signout',
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.logout),
+                  title: Text('退出登录（${widget.session.displayName}）'),
                 ),
               ),
             ],

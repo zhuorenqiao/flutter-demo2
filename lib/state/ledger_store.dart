@@ -1,82 +1,79 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier;
 
+import '../data/demo_data.dart';
 import '../data/ledger_repository.dart';
+import '../models/stats.dart';
 import '../models/txn.dart';
 
-class CategorySlice {
-  const CategorySlice(this.category, this.amount);
-
-  final TxnCategory category;
-  final double amount;
-}
-
-class Summary {
-  const Summary({
-    required this.expense,
-    required this.income,
-    required this.expenseByCategory,
-    required this.incomeByCategory,
-    required this.count,
-  });
-
-  final double expense;
-  final double income;
-  final List<CategorySlice> expenseByCategory;
-  final List<CategorySlice> incomeByCategory;
-  final int count;
-
-  double get balance => income - expense;
-}
-
-class TrendPoint {
-  const TrendPoint(this.label, this.expense, this.income);
-
-  final String label;
-  final double expense;
-  final double income;
-}
-
-class DayGroup {
-  const DayGroup(this.day, this.txns, this.expense, this.income);
-
-  final DateTime day;
-  final List<Txn> txns;
-  final double expense;
-  final double income;
-}
-
-/// 内存中持有一份账本，负责读写数据库并派生各类统计口径。
+/// 内存中持有一份账本流水，统计口径全部委托给仓库（线上即后端 + MySQL）。
 class LedgerStore extends ChangeNotifier {
   LedgerStore(this._repo);
 
   final LedgerRepository _repo;
 
+  /// 流水页一次加载的条数。
+  static const pageSize = 20;
+
   List<Txn> _txns = const [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  bool _disposed = false;
   Object? _error;
+  Object? _moreError;
+  int _page = 0;
 
   List<Txn> get txns => _txns;
   bool get loading => _loading;
+  bool get loadingMore => _loadingMore;
+  bool get hasMore => _hasMore;
   Object? get error => _error;
+  Object? get moreError => _moreError;
   bool get isEmpty => _txns.isEmpty;
 
+  /// 每次写入递增，报表页据此判断是否需要重新拉取统计。
+  int get revision => _revision;
+  int _revision = 0;
+
+  /// 重新从第一页开始加载。
   Future<void> load() async {
-    _loading = true;
+    _setLoading(true);
     _error = null;
-    notifyListeners();
     try {
-      _txns = await _repo.loadAll();
+      final first = await _repo.loadPage(0, pageSize);
+      _txns = first.txns;
+      _page = 0;
+      _hasMore = first.hasMore;
     } catch (e) {
       _error = e;
     }
-    _loading = false;
-    notifyListeners();
+    _setLoading(false);
+  }
+
+  /// 滚动到底部时加载下一页。
+  Future<void> loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    _loadingMore = true;
+    _moreError = null;
+    _notify();
+    try {
+      final next = await _repo.loadPage(_page + 1, pageSize);
+      _page++;
+      // 新增一笔会让服务端整体后移一位，边界上的记录可能重复出现
+      final seen = _txns.map((t) => t.id).toSet();
+      _txns = [..._txns, ...next.txns.where((t) => !seen.contains(t.id))];
+      _hasMore = next.hasMore;
+    } catch (e) {
+      _moreError = e;
+    }
+    _loadingMore = false;
+    _notify();
   }
 
   Future<void> add(Txn txn) async {
     final saved = await _repo.insert(txn);
     _txns = [saved, ..._txns]..sort(_byDayDesc);
-    notifyListeners();
+    _touch();
   }
 
   Future<void> remove(Txn txn) async {
@@ -84,107 +81,45 @@ class LedgerStore extends ChangeNotifier {
     if (id == null) return;
     await _repo.delete(id);
     _txns = _txns.where((t) => t.id != id).toList();
-    notifyListeners();
+    _touch();
   }
 
   Future<void> clearAll() async {
     await _repo.deleteAll();
     _txns = const [];
-    notifyListeners();
+    _touch();
   }
 
   Future<void> seedDemoData() async {
-    await _repo.insertMany(_demoTxns());
+    await _repo.insertMany(demoTxns());
     await load();
   }
 
-  static int _byDayDesc(Txn a, Txn b) {
-    final byDay = b.day.compareTo(a.day);
-    return byDay != 0 ? byDay : b.createdAt.compareTo(a.createdAt);
-  }
+  // ---------- 统计（由仓库计算，线上走后端接口） ----------
 
-  // ---------- 派生统计 ----------
-
-  static Summary summarize(Iterable<Txn> txns) {
-    var expense = 0.0, income = 0.0;
-    final exp = <String, double>{};
-    final inc = <String, double>{};
-    for (final t in txns) {
-      if (t.type == TxnType.expense) {
-        expense += t.amount;
-        exp[t.categoryKey] = (exp[t.categoryKey] ?? 0) + t.amount;
-      } else {
-        income += t.amount;
-        inc[t.categoryKey] = (inc[t.categoryKey] ?? 0) + t.amount;
-      }
-    }
-    List<CategorySlice> slices(Map<String, double> m) {
-      final list = m.entries.map((e) => CategorySlice(categoryOf(e.key), e.value)).toList()
-        ..sort((a, b) => b.amount.compareTo(a.amount));
-      return list;
-    }
-
-    return Summary(
-      expense: expense,
-      income: income,
-      expenseByCategory: slices(exp),
-      incomeByCategory: slices(inc),
-      count: txns.length,
-    );
-  }
-
-  List<Txn> txnsOfDay(DateTime day) {
+  Future<Summary> summaryOfDay(DateTime day) {
     final key = dayKey(day);
-    return _txns.where((t) => t.day == key).toList();
+    return _repo.summary(fromDay: key, toDay: key);
   }
 
-  Summary summaryOfDay(DateTime day) => summarize(txnsOfDay(day));
-
-  /// 按月内每天聚合，缺失日期补 0，保证柱状图横轴连续。
-  List<TrendPoint> dailyTrend(int year, int month) {
-    final buckets = <String, List<Txn>>{};
-    for (final t in _txns) {
-      final d = t.dayDate;
-      if (d.year == year && d.month == month) {
-        buckets.putIfAbsent(t.day, () => []).add(t);
-      }
-    }
-    final count = _daysInMonth(year, month);
-    return List.generate(count, (i) {
-      final day = dayKey(DateTime(year, month, i + 1));
-      final s = summarize(buckets[day] ?? const []);
-      return TrendPoint('${i + 1}', s.expense, s.income);
-    });
+  Future<Summary> summaryOfMonth(int year, int month) async {
+    final (from, to) = _monthRange(year, month);
+    return _repo.summary(fromDay: from, toDay: to);
   }
 
-  List<TrendPoint> monthlyTrend(int year) {
-    final buckets = <int, List<Txn>>{};
-    for (final t in _txns) {
-      final d = t.dayDate;
-      if (d.year == year) buckets.putIfAbsent(d.month, () => []).add(t);
-    }
-    return List.generate(12, (i) {
-      final s = summarize(buckets[i + 1] ?? const []);
-      return TrendPoint('${i + 1}', s.expense, s.income);
-    });
-  }
-
-  Summary summaryOfMonth(int year, int month) => summarize(
-    _txns.where((t) {
-      final d = t.dayDate;
-      return d.year == year && d.month == month;
-    }),
+  Future<Summary> summaryOfYear(int year) => _repo.summary(
+    fromDay: '$year-01-01',
+    toDay: '$year-12-31',
   );
 
-  Summary summaryOfYear(int year) =>
-      summarize(_txns.where((t) => t.dayDate.year == year));
+  Future<List<TrendPoint>> dailyTrend(int year, int month) => _repo.dailyTrend(year, month);
 
-  /// 账本中出现过的年份，倒序；无数据时只含今年。
-  List<int> get years {
-    final set = _txns.map((t) => t.dayDate.year).toSet();
-    set.add(DateTime.now().year);
-    return set.toList()..sort((a, b) => b.compareTo(a));
-  }
+  Future<List<TrendPoint>> monthlyTrend(int year) => _repo.monthlyTrend(year);
+
+  Future<List<int>> years() => _repo.years();
+
+  /// 某一天的流水：内存里只有已加载的分页，需要单独向仓库取。
+  Future<List<Txn>> txnsOfDay(DateTime day) => _repo.loadDay(dayKey(day));
 
   List<DayGroup> get dayGroups {
     final buckets = <String, List<Txn>>{};
@@ -199,78 +134,42 @@ class LedgerStore extends ChangeNotifier {
     }).toList();
   }
 
-  static int _daysInMonth(int year, int month) =>
-      DateTime(year, month + 1, 0).day;
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _setLoading(bool value) {
+    _loading = value;
+    _notify();
+  }
+
+  void _touch() {
+    _revision++;
+    _notify();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  static (String, String) _monthRange(int year, int month) => (
+    dayKey(DateTime(year, month, 1)),
+    dayKey(DateTime(year, month + 1, 0)),
+  );
+
+  static int _byDayDesc(Txn a, Txn b) {
+    final byDay = b.day.compareTo(a.day);
+    return byDay != 0 ? byDay : b.createdAt.compareTo(a.createdAt);
+  }
 }
 
-List<Txn> _demoTxns() {
-  final now = DateTime.now();
-  var seed = 7;
-  double next(double lo, double hi) {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return lo + (seed % 10000) / 10000 * (hi - lo);
-  }
+class DayGroup {
+  const DayGroup(this.day, this.txns, this.expense, this.income);
 
-  final result = <Txn>[];
-  // 近 14 个月的日常支出 + 每月工资，便于日/月/年三种视图都有内容。
-  for (var back = 13; back >= 0; back--) {
-    final month = DateTime(now.year, now.month - back);
-    final daysInMonth = LedgerStore._daysInMonth(month.year, month.month);
-    final lastDay = month.isAtSameMomentAs(DateTime(now.year, now.month))
-        ? now.day
-        : daysInMonth;
-    result.add(
-      Txn(
-        type: TxnType.income,
-        categoryKey: 'salary',
-        amount: 12000 + (month.month % 3) * 600,
-        day: dayKey(DateTime(month.year, month.month, 10)),
-        createdAt: DateTime(month.year, month.month, 10).millisecondsSinceEpoch,
-      ),
-    );
-    if (month.month % 4 == 0) {
-      result.add(
-        Txn(
-          type: TxnType.income,
-          categoryKey: 'investment',
-          amount: next(300, 2600),
-          day: dayKey(DateTime(month.year, month.month, 18)),
-          createdAt: DateTime(month.year, month.month, 18).millisecondsSinceEpoch,
-        ),
-      );
-    }
-    const spendCats = [
-      ('food', 18.0, 160.0),
-      ('transport', 6.0, 45.0),
-      ('shopping', 60.0, 680.0),
-      ('entertainment', 20.0, 220.0),
-      ('medical', 30.0, 400.0),
-      ('study', 40.0, 300.0),
-      ('beauty', 80.0, 900.0),
-    ];
-    var createdBase = DateTime(month.year, month.month, 1).millisecondsSinceEpoch;
-    for (var d = 1; d <= lastDay; d++) {
-      final day = DateTime(month.year, month.month, d);
-      final items = <(String, double)>[];
-      for (final (key, lo, hi) in spendCats) {
-        final chance = key == 'food' ? 0.85 : 0.18;
-        if (next(0, 1) < chance) {
-          items.add((key, next(lo, hi)));
-        }
-      }
-      if (day.day % 5 == 0) items.add(('housing', next(900, 2600)));
-      for (var i = 0; i < items.length; i++) {
-        result.add(
-          Txn(
-            type: TxnType.expense,
-            categoryKey: items[i].$1,
-            amount: double.parse(items[i].$2.toStringAsFixed(2)),
-            day: dayKey(day),
-            createdAt: createdBase + d * 100000 + i * 1000,
-          ),
-        );
-      }
-    }
-  }
-  return result;
+  final DateTime day;
+  final List<Txn> txns;
+  final double expense;
+  final double income;
 }

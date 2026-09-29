@@ -1,8 +1,22 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../app_theme.dart';
+import '../models/stats.dart';
 import '../models/txn.dart';
-import '../state/ledger_store.dart';
+
+/// 渐变亮端：向白提亮
+Color _lift(Color color) => Color.lerp(color, Colors.white, 0.32)!;
+
+/// 渐变暗端：略微压深，让色块有层次而不发灰
+Color _sink(Color color) => Color.lerp(color, Colors.black, 0.10)!;
+
+/// 柱子上浅下深的竖向渐变
+LinearGradient _rodGradient(Color base) => LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [_lift(base), base],
+);
 
 /// 收支概览卡片
 class SummaryCards extends StatelessWidget {
@@ -22,17 +36,17 @@ class SummaryCards extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
               children: [
-                _cell(context, '支出', summary.expense, const Color(0xFFE53935)),
+                _cell(context, '支出', summary.expense, kExpense),
                 _divider(context),
-                _cell(context, '收入', summary.income, const Color(0xFF43A047)),
+                _cell(context, '收入', summary.income, kIncome),
                 _divider(context),
                 _cell(
                   context,
                   '结余',
                   summary.balance,
                   summary.balance >= 0
-                      ? const Color(0xFF1E88E5)
-                      : const Color(0xFFFB8C00),
+                      ? kBalancePositive
+                      : kBalanceNegative,
                 ),
               ],
             ),
@@ -59,7 +73,7 @@ class SummaryCards extends StatelessWidget {
   Widget _cell(BuildContext context, String label, double value, Color color) =>
       Expanded(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(label, style: Theme.of(context).textTheme.labelMedium),
             const SizedBox(height: 4),
@@ -67,6 +81,7 @@ class SummaryCards extends StatelessWidget {
               formatMoney(value),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: color,
                 fontSize: 18,
@@ -105,6 +120,14 @@ class CategoryPieCard extends StatelessWidget {
                           PieChartSectionData(
                             value: s.amount,
                             color: s.category.color,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                _lift(s.category.color),
+                                _sink(s.category.color),
+                              ],
+                            ),
                             radius: 58,
                             title: (s.amount / total * 100).toStringAsFixed(0),
                             titleStyle: const TextStyle(
@@ -162,20 +185,23 @@ class TrendBarCard extends StatelessWidget {
     required this.title,
     required this.points,
     required this.unitLabel,
-    this.tooltipWithoutSuffix = false,
+    this.showIncome = true,
   });
 
   final String title;
   final List<TrendPoint> points;
   final String unitLabel;
-  final bool tooltipWithoutSuffix;
+  final bool showIncome;
 
   @override
   Widget build(BuildContext context) {
-    final maxV = points.fold<double>(
-      0,
-      (a, p) => [a, p.expense, p.income].reduce((x, y) => x > y ? x : y),
-    );
+    final labelStep = points.length > 16 ? 5 : 1;
+    double maxValue(TrendPoint p) =>
+        showIncome ? (p.expense > p.income ? p.expense : p.income) : p.expense;
+    final maxV = points.fold<double>(0, (a, p) {
+      final v = maxValue(p);
+      return v > a ? v : a;
+    });
     final hasData = maxV > 0;
     return _Card(
       title: title,
@@ -224,16 +250,16 @@ class TrendBarCard extends StatelessWidget {
                         showTitles: true,
                         reservedSize: 24,
                         // 数据点很多时隔级显示，避免标签重叠
-                        interval: points.length > 16 ? 5.0 : 1.0,
+                        interval: labelStep.toDouble(),
                         getTitlesWidget: (v, _) {
                           final i = v.round();
-                          if (i < 0 || i >= points.length) {
+                          if (i != v || i % labelStep != 0) {
                             return const SizedBox.shrink();
                           }
                           return Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              points[i].label,
+                              points[i.clamp(0, points.length - 1)].label,
                               style: const TextStyle(fontSize: 11),
                             ),
                           );
@@ -248,20 +274,21 @@ class TrendBarCard extends StatelessWidget {
                         barRods: [
                           BarChartRodData(
                             toY: points[i].expense,
-                            color: const Color(0xFFE53935),
-                            width: points.length > 16 ? 3 : 7,
+                            gradient: _rodGradient(kExpense),
+                            width: points.length > 16 ? 4 : 9,
                             borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(2),
+                              top: Radius.circular(4),
                             ),
                           ),
-                          BarChartRodData(
-                            toY: points[i].income,
-                            color: const Color(0xFF43A047),
-                            width: points.length > 16 ? 3 : 7,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(2),
+                          if (showIncome)
+                            BarChartRodData(
+                              toY: points[i].income,
+                              gradient: _rodGradient(kIncome),
+                              width: points.length > 16 ? 4 : 9,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(4),
+                              ),
                             ),
-                          ),
                         ],
                       ),
                   ],
@@ -280,16 +307,20 @@ class TrendBarCard extends StatelessWidget {
 
 /// 支出/收入图例说明
 class LegendRow extends StatelessWidget {
-  const LegendRow({super.key});
+  const LegendRow({super.key, this.showIncome = true});
+
+  final bool showIncome;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _dot(context, const Color(0xFFE53935), '支出'),
-        const SizedBox(width: 16),
-        _dot(context, const Color(0xFF43A047), '收入'),
+        _dot(context, kExpense, '支出'),
+        if (showIncome) ...[
+          const SizedBox(width: 16),
+          _dot(context, kIncome, '收入'),
+        ],
       ],
     );
   }
