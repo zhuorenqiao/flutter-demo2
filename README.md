@@ -1,16 +1,16 @@
 # flutter_demo2 — 记账本
 
-Flutter 记账应用，数据来自 Java 后端 + MySQL（`backend/`）。
+Flutter 记账应用，数据来自 Java 后端 + MySQL（同级目录 `../ledger-backend`）。
 日/月/年趋势与分类占比都由后端 SQL 聚合，客户端只负责渲染。
 
 ## 跑起来
 
 ```bash
-cd backend
+cd ../ledger-backend
 docker compose up -d        # MySQL 8.4，首次启动自动建表
 ./mvnw spring-boot:run      # 后端，http://localhost:9090
 
-cd ..
+cd -
 flutter run -d web-server --web-port 8888   # 打开 http://127.0.0.1:8888
 ```
 
@@ -18,7 +18,7 @@ flutter run -d web-server --web-port 8888   # 打开 http://127.0.0.1:8888
 登录页可以直接改服务器地址，Android 模拟器请用 `--dart-define=API_BASE_URL=http://10.0.2.2:9090`。
 进去后用右上角菜单的「载入示例数据」灌一批账单，图表才有内容。
 
-接口清单、环境变量与端口说明见 [backend/README.md](backend/README.md)。
+接口清单、环境变量与端口说明见同级目录的 `../ledger-backend/README.md`。
 
 ## 结构
 
