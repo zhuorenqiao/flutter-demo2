@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ChangeNotifier;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -137,7 +138,7 @@ class AuthSession extends ChangeNotifier {
     await _applyUser(payload.cast<String, dynamic>());
   }
 
-  Future<void> uploadAvatar({required List<int> bytes, required String filename}) async {
+  Future<void> uploadAvatar({required Uint8List bytes, required String filename}) async {
     final payload = await api.postBytes(
       '/api/auth/me/avatar',
       field: 'file',

@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+
+/// multipart 里的一个文件。web 端拿不到本地路径，只能带着字节和文件名走。
+typedef FormFile = ({String filename, Uint8List bytes});
 
 /// 后端返回的业务错误：`code` 是统一响应体里的业务码，`statusCode` 是 HTTP 状态。
 class ApiException implements Exception {
@@ -57,19 +62,32 @@ class ApiClient {
 
   Future<dynamic> put(String path, Object? body) => _send(() => _dio.put(path, data: body));
 
-  /// 上传二进制（头像）。web 端拿不到文件路径，只能传字节。
+  /// 上传单个二进制（头像）。web 端拿不到文件路径，只能传字节。
   Future<dynamic> postBytes(
     String path, {
     required String field,
-    required List<int> bytes,
+    required Uint8List bytes,
     required String filename,
   }) =>
-      _send(() => _dio.post(
-            path,
-            data: FormData.fromMap({
-              field: MultipartFile.fromBytes(bytes, filename: filename),
-            }),
-          ));
+      postForm(path, fileField: field, files: [(filename: filename, bytes: bytes)]);
+
+  /// 提交表单，可带多个同名文件（反馈图片）。没有文件时不留空字段，
+  /// 免得后端收到一个空的 multipart part。
+  Future<dynamic> postForm(
+    String path, {
+    Map<String, String> fields = const {},
+    String fileField = 'files',
+    List<FormFile> files = const [],
+  }) {
+    final data = <String, dynamic>{...fields};
+    if (files.isNotEmpty) {
+      data[fileField] = [
+        for (final file in files)
+          MultipartFile.fromBytes(file.bytes, filename: file.filename),
+      ];
+    }
+    return _send(() => _dio.post(path, data: FormData.fromMap(data)));
+  }
 
   Future<dynamic> delete(String path) => _send(() => _dio.delete(path));
 

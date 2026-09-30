@@ -7,6 +7,7 @@ import '../state/theme_mode_controller.dart';
 import '../utils/run_guarded.dart';
 import 'add_txn_page.dart';
 import 'analytics_page.dart';
+import 'feedback_page.dart';
 import 'profile_page.dart';
 import 'records_page.dart';
 
@@ -49,6 +50,11 @@ class _HomePageState extends State<HomePage> {
         _clearAll();
       case 'theme':
         _pickThemeMode();
+      case 'feedback':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => FeedbackPage(session: widget.session)),
+        );
       case 'signout':
         widget.session.signOut();
     }
@@ -144,6 +150,14 @@ class _HomePageState extends State<HomePage> {
                   dense: true,
                   leading: const Icon(Icons.palette_outlined),
                   title: Text('切换主题（${widget.theme.label}）'),
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'feedback',
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.feedback_outlined),
+                  title: Text('意见反馈'),
                 ),
               ),
               PopupMenuItem(

@@ -6,6 +6,7 @@ import 'package:ledger_front/auth/auth_session.dart';
 import 'package:ledger_front/data/ledger_repository.dart';
 import 'package:ledger_front/main.dart';
 import 'package:ledger_front/models/txn.dart';
+import 'package:ledger_front/pages/feedback_page.dart';
 import 'package:ledger_front/pages/login_page.dart';
 import 'package:ledger_front/pages/records_page.dart';
 import 'package:ledger_front/state/ledger_store.dart';
@@ -94,6 +95,30 @@ void main() {
     );
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('ui.themeMode'), 'dark');
+  });
+
+  testWidgets('从右上角菜单进入意见反馈', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth.token': 'jwt',
+      'auth.user': jsonEncode({'id': 1, 'username': 'ren', 'nickname': '仁'}),
+    });
+    final session = await AuthSession.restore();
+
+    await tester.pumpWidget(
+      LedgerApp(
+        session: session,
+        storeFactory: (_) => LedgerStore(SharedPreferencesRepository()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('意见反馈'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FeedbackPage), findsOne);
+    expect(find.text('提交'), findsOne);
   });
 
   testWidgets('流水页滑到底部自动加载下一页', (tester) async {
